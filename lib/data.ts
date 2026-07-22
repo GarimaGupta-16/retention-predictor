@@ -157,6 +157,13 @@ export const SATISFACTION_DIST = [
   { bucket: "0.8–1.0", count: 11 },
 ]
 
+export const INSIGHTS = [
+  "Finance shows the highest predicted attrition rate (20%). Low satisfaction scores and stagnant compensation are the primary drivers — a market compensation review is recommended.",
+  "Employees working over 45 hours/week are 2.3x more likely to be flagged high-risk. Rebalancing workload in Operations could reduce projected attrition by an estimated 4%.",
+  "Tenure without promotion is a strong signal: 68% of high-risk employees have gone 4+ years without advancement. Formalizing growth paths would improve retention.",
+  "Overall projected retention sits at 87%, up 2.1% from last quarter, driven by improved satisfaction scores in Engineering and Sales.",
+]
+
 export const HR_USER = {
   name: "Hr Lead",
   email: "hr.lead@retenai.io",
