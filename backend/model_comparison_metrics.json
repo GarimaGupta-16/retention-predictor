@@ -1,0 +1,238 @@
+{
+  "task": "Task 11: Attrition Detection Improvement & Threshold Optimization",
+  "deduplication_info": {
+    "raw_total_records": 4410,
+    "deduplicated_unique_profiles": 1573,
+    "duplicate_records_removed": 2837,
+    "conflicting_profiles": 0,
+    "raw_attrition_ratio": 0.16122448979591836,
+    "dedup_attrition_ratio": 0.16020343293070566
+  },
+  "selected_model": "RandomForestClassifier_Balanced",
+  "selected_threshold": 0.3,
+  "candidate_cv_comparison": [
+    {
+      "model": "RandomForestClassifier_Unweighted",
+      "cv_accuracy_mean": 0.8577,
+      "cv_accuracy_std": 0.0064,
+      "cv_precision_mean": 0.7628,
+      "cv_precision_std": 0.1087,
+      "cv_recall_mean": 0.1683,
+      "cv_recall_std": 0.018,
+      "cv_f1_mean": 0.2753,
+      "cv_f1_std": 0.0299,
+      "cv_f2_mean": 0.1993,
+      "cv_f2_std": 0.0214,
+      "cv_roc_auc_mean": 0.7434,
+      "cv_roc_auc_std": 0.0582,
+      "cv_pr_auc_mean": 0.4712,
+      "cv_pr_auc_std": 0.0621
+    },
+    {
+      "model": "RandomForestClassifier_Balanced",
+      "cv_accuracy_mean": 0.8537,
+      "cv_accuracy_std": 0.0086,
+      "cv_precision_mean": 0.5876,
+      "cv_precision_std": 0.0487,
+      "cv_recall_mean": 0.3022,
+      "cv_recall_std": 0.0309,
+      "cv_f1_mean": 0.3985,
+      "cv_f1_std": 0.0354,
+      "cv_f2_mean": 0.3345,
+      "cv_f2_std": 0.0326,
+      "cv_roc_auc_mean": 0.7452,
+      "cv_roc_auc_std": 0.0504,
+      "cv_pr_auc_mean": 0.479,
+      "cv_pr_auc_std": 0.0423
+    },
+    {
+      "model": "ExtraTreesClassifier_Unweighted",
+      "cv_accuracy_mean": 0.8569,
+      "cv_accuracy_std": 0.0076,
+      "cv_precision_mean": 0.7606,
+      "cv_precision_std": 0.1022,
+      "cv_recall_mean": 0.1582,
+      "cv_recall_std": 0.0357,
+      "cv_f1_mean": 0.2609,
+      "cv_f1_std": 0.0533,
+      "cv_f2_mean": 0.1877,
+      "cv_f2_std": 0.0412,
+      "cv_roc_auc_mean": 0.7283,
+      "cv_roc_auc_std": 0.0545,
+      "cv_pr_auc_mean": 0.4518,
+      "cv_pr_auc_std": 0.0414
+    },
+    {
+      "model": "ExtraTreesClassifier_Balanced",
+      "cv_accuracy_mean": 0.8561,
+      "cv_accuracy_std": 0.0045,
+      "cv_precision_mean": 0.8289,
+      "cv_precision_std": 0.1443,
+      "cv_recall_mean": 0.1388,
+      "cv_recall_std": 0.0343,
+      "cv_f1_mean": 0.2345,
+      "cv_f1_std": 0.049,
+      "cv_f2_mean": 0.1658,
+      "cv_f2_std": 0.0392,
+      "cv_roc_auc_mean": 0.7296,
+      "cv_roc_auc_std": 0.0304,
+      "cv_pr_auc_mean": 0.4601,
+      "cv_pr_auc_std": 0.0336
+    }
+  ],
+  "oof_threshold_optimization_table": [
+    {
+      "threshold": 0.5,
+      "accuracy": 0.8514,
+      "precision": 0.5688,
+      "recall": 0.3069,
+      "f1_score": 0.3987,
+      "f2_score": 0.3381,
+      "confusion_matrix": {
+        "true_negatives": 1009,
+        "false_positives": 47,
+        "false_negatives": 140,
+        "true_positives": 62
+      }
+    },
+    {
+      "threshold": 0.45,
+      "accuracy": 0.8426,
+      "precision": 0.5127,
+      "recall": 0.401,
+      "f1_score": 0.45,
+      "f2_score": 0.4193,
+      "confusion_matrix": {
+        "true_negatives": 979,
+        "false_positives": 77,
+        "false_negatives": 121,
+        "true_positives": 81
+      }
+    },
+    {
+      "threshold": 0.4,
+      "accuracy": 0.8188,
+      "precision": 0.4381,
+      "recall": 0.4554,
+      "f1_score": 0.4466,
+      "f2_score": 0.4519,
+      "confusion_matrix": {
+        "true_negatives": 938,
+        "false_positives": 118,
+        "false_negatives": 110,
+        "true_positives": 92
+      }
+    },
+    {
+      "threshold": 0.35,
+      "accuracy": 0.7774,
+      "precision": 0.3682,
+      "recall": 0.5396,
+      "f1_score": 0.4378,
+      "f2_score": 0.4937,
+      "confusion_matrix": {
+        "true_negatives": 869,
+        "false_positives": 187,
+        "false_negatives": 93,
+        "true_positives": 109
+      }
+    },
+    {
+      "threshold": 0.3,
+      "accuracy": 0.7218,
+      "precision": 0.323,
+      "recall": 0.6683,
+      "f1_score": 0.4355,
+      "f2_score": 0.5506,
+      "confusion_matrix": {
+        "true_negatives": 773,
+        "false_positives": 283,
+        "false_negatives": 67,
+        "true_positives": 135
+      }
+    },
+    {
+      "threshold": 0.25,
+      "accuracy": 0.6208,
+      "precision": 0.2609,
+      "recall": 0.7426,
+      "f1_score": 0.3861,
+      "f2_score": 0.5423,
+      "confusion_matrix": {
+        "true_negatives": 631,
+        "false_positives": 425,
+        "false_negatives": 52,
+        "true_positives": 150
+      }
+    },
+    {
+      "threshold": 0.2,
+      "accuracy": 0.4849,
+      "precision": 0.2141,
+      "recall": 0.8267,
+      "f1_score": 0.3401,
+      "f2_score": 0.5258,
+      "confusion_matrix": {
+        "true_negatives": 443,
+        "false_positives": 613,
+        "false_negatives": 35,
+        "true_positives": 167
+      }
+    },
+    {
+      "threshold": 0.15,
+      "accuracy": 0.3251,
+      "precision": 0.1787,
+      "recall": 0.8911,
+      "f1_score": 0.2978,
+      "f2_score": 0.4959,
+      "confusion_matrix": {
+        "true_negatives": 229,
+        "false_positives": 827,
+        "false_negatives": 22,
+        "true_positives": 180
+      }
+    }
+  ],
+  "final_held_out_test_evaluation": {
+    "model": "RandomForestClassifier_Balanced",
+    "test_samples": 315,
+    "test_attrition_count": 50,
+    "roc_auc": 0.7692,
+    "pr_auc": 0.5117,
+    "threshold_evaluations": {
+      "default_0.50": {
+        "threshold": 0.5,
+        "accuracy": 0.8698,
+        "precision": 0.6667,
+        "recall": 0.36,
+        "f1_score": 0.4675,
+        "f2_score": 0.3965,
+        "roc_auc": 0.7692,
+        "pr_auc": 0.5117,
+        "confusion_matrix": {
+          "true_negatives": 256,
+          "false_positives": 9,
+          "false_negatives": 32,
+          "true_positives": 18
+        }
+      },
+      "optimized_0.30": {
+        "threshold": 0.3,
+        "accuracy": 0.7206,
+        "precision": 0.3137,
+        "recall": 0.64,
+        "f1_score": 0.4211,
+        "f2_score": 0.5298,
+        "roc_auc": 0.7692,
+        "pr_auc": 0.5117,
+        "confusion_matrix": {
+          "true_negatives": 195,
+          "false_positives": 70,
+          "false_negatives": 18,
+          "true_positives": 32
+        }
+      }
+    }
+  }
+}

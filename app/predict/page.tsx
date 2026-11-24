@@ -8,66 +8,102 @@ import {
   RotateCcw,
   CheckCircle2,
   AlertTriangle,
+  Info,
+  ShieldCheck,
 } from "lucide-react"
 
-type PredictInput = {
+// Exact 24 model features matching pipeline_features.json
+export type PredictInput = {
+  // Demographics & Education
   Age: number
-  Gender: string
-  Marital_Status: string
-  Department: string
-  Job_Role: string
-  Job_Level: number
-  Monthly_Income: number
-  Hourly_Rate: number
-  Years_at_Company: number
-  Years_in_Current_Role: number
-  Years_Since_Last_Promotion: number
-  Work_Life_Balance: number
-  Job_Satisfaction: number
-  Performance_Rating: number
-  Training_Hours_Last_Year: number
-  Overtime: string
-  Project_Count: number
-  Average_Hours_Worked_Per_Week: number
-  Absenteeism: number
-  Work_Environment_Satisfaction: number
-  Relationship_with_Manager: number
-  Job_Involvement: number
-  Distance_From_Home: number
-  Number_of_Companies_Worked: number
+  Gender: "Male" | "Female"
+  MaritalStatus: "Single" | "Married" | "Divorced"
+  Education: number
+  EducationField:
+    | "Life Sciences"
+    | "Medical"
+    | "Marketing"
+    | "Technical Degree"
+    | "Human Resources"
+    | "Other"
+  DistanceFromHome: number
+
+  // Department & Role
+  Department: "Research & Development" | "Sales" | "Human Resources"
+  JobRole:
+    | "Sales Executive"
+    | "Research Scientist"
+    | "Laboratory Technician"
+    | "Manufacturing Director"
+    | "Healthcare Representative"
+    | "Manager"
+    | "Sales Representative"
+    | "Research Director"
+    | "Human Resources"
+  JobLevel: number
+  BusinessTravel: "Travel_Rarely" | "Travel_Frequently" | "Non-Travel"
+  MonthlyIncome: number
+  PercentSalaryHike: number
+  StockOptionLevel: number
+
+  // Tenure & Work History
+  TotalWorkingYears: number
+  YearsAtCompany: number
+  YearsSinceLastPromotion: number
+  YearsWithCurrManager: number
+  NumCompaniesWorked: number
+  TrainingTimesLastYear: number
+
+  // Survey Ratings (1-4)
+  JobSatisfaction: number
+  EnvironmentSatisfaction: number
+  WorkLifeBalance: number
+  JobInvolvement: number
+  PerformanceRating: number
 }
 
-type PredictionResult = {
-  prediction: number
+export type PredictionResponse = {
   probability: number
+  probability_ratio: number
+  prediction: number // 1 or 0 (at optimized 0.30 threshold)
+  prediction_optimized: number
+  prediction_default: number
   risk: "Low" | "Medium" | "High"
+  risk_category: "Low Risk" | "Moderate Risk" | "High Risk"
+  thresholds: {
+    optimized: number
+    default: number
+  }
+  explanation: string
+  recommendation: string
+  model_name: string
 }
 
 const DEFAULTS: PredictInput = {
-  Age: 30,
+  Age: 32,
   Gender: "Male",
-  Marital_Status: "Single",
-  Department: "Sales",
-  Job_Role: "Manager",
-  Job_Level: 2,
-  Monthly_Income: 5000,
-  Hourly_Rate: 50,
-  Years_at_Company: 4,
-  Years_in_Current_Role: 2,
-  Years_Since_Last_Promotion: 1,
-  Work_Life_Balance: 3,
-  Job_Satisfaction: 3,
-  Performance_Rating: 3,
-  Training_Hours_Last_Year: 40,
-  Overtime: "Yes",
-  Project_Count: 4,
-  Average_Hours_Worked_Per_Week: 45,
-  Absenteeism: 5,
-  Work_Environment_Satisfaction: 3,
-  Relationship_with_Manager: 3,
-  Job_Involvement: 3,
-  Distance_From_Home: 10,
-  Number_of_Companies_Worked: 2,
+  MaritalStatus: "Single",
+  Education: 3, // Bachelor
+  EducationField: "Life Sciences",
+  DistanceFromHome: 10,
+  Department: "Research & Development",
+  JobRole: "Laboratory Technician",
+  JobLevel: 2,
+  BusinessTravel: "Travel_Rarely",
+  MonthlyIncome: 45000,
+  PercentSalaryHike: 13,
+  StockOptionLevel: 1,
+  TotalWorkingYears: 8,
+  YearsAtCompany: 4,
+  YearsSinceLastPromotion: 1,
+  YearsWithCurrManager: 2,
+  NumCompaniesWorked: 2,
+  TrainingTimesLastYear: 2,
+  JobSatisfaction: 2,
+  EnvironmentSatisfaction: 3,
+  WorkLifeBalance: 2,
+  JobInvolvement: 3,
+  PerformanceRating: 3,
 }
 
 const inputCls =
@@ -93,12 +129,14 @@ function NumberField({
   value,
   min,
   max,
+  step = 1,
   onChange,
 }: {
   label: string
   value: number
   min?: number
   max?: number
+  step?: number
   onChange: (value: number) => void
 }) {
   return (
@@ -107,6 +145,7 @@ function NumberField({
         type="number"
         min={min}
         max={max}
+        step={step}
         className={inputCls}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
@@ -115,27 +154,33 @@ function NumberField({
   )
 }
 
-function SelectField({
+function SelectField<T extends string | number>({
   label,
   value,
   options,
   onChange,
 }: {
   label: string
-  value: string
-  options: string[]
-  onChange: (value: string) => void
+  value: T
+  options: { label: string; value: T }[]
+  onChange: (value: T) => void
 }) {
   return (
     <Field label={label}>
       <select
         className={inputCls}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
+        value={String(value)}
+        onChange={(e) => {
+          const val = e.target.value
+          const matched = options.find((opt) => String(opt.value) === val)
+          if (matched) {
+            onChange(matched.value)
+          }
+        }}
       >
         {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
+          <option key={String(option.value)} value={String(option.value)}>
+            {option.label}
           </option>
         ))}
       </select>
@@ -145,14 +190,11 @@ function SelectField({
 
 export default function PredictPage() {
   const [input, setInput] = useState<PredictInput>(DEFAULTS)
-  const [result, setResult] = useState<PredictionResult | null>(null)
+  const [result, setResult] = useState<PredictionResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
-  function set<K extends keyof PredictInput>(
-    key: K,
-    value: PredictInput[K]
-  ) {
+  function set<K extends keyof PredictInput>(key: K, value: PredictInput[K]) {
     setInput((prev) => ({
       ...prev,
       [key]: value,
@@ -167,7 +209,7 @@ export default function PredictPage() {
     setResult(null)
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/predict", {
+      const response = await fetch("/api/predict", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -176,17 +218,20 @@ export default function PredictPage() {
       })
 
       if (!response.ok) {
-        throw new Error("Prediction request failed")
+        const errorData = await response.json().catch(() => null)
+        throw new Error(
+          errorData?.error ||
+            "Prediction request failed. Ensure the FastAPI backend is running."
+        )
       }
 
-      const data = await response.json()
-
+      const data: PredictionResponse = await response.json()
       setResult(data)
-    } catch (err) {
+    } catch (err: any) {
       console.error(err)
-
       setError(
-        "Unable to connect to the prediction server. Make sure FastAPI is running on port 8000."
+        err.message ||
+          "Unable to connect to the prediction server. Make sure FastAPI is running on port 8000."
       )
     } finally {
       setLoading(false)
@@ -199,361 +244,367 @@ export default function PredictPage() {
     setError("")
   }
 
-  const risk = result?.probability ?? 0
+  const riskPct = result?.probability ?? 0
 
+  // Risk categorization:
+  // Low Risk: < 20%
+  // Moderate Risk: 20% to < 35%
+  // High Risk: >= 35%
   const statusForPill =
-    result?.risk === "High"
-      ? "High Risk"
-      : result?.risk === "Medium"
-        ? "Watch"
-        : "Stable"
+    riskPct >= 35 ? "High Risk" : riskPct >= 20 ? "Watch" : "Stable"
 
   return (
     <AppShell title="Predict">
       <div className="grid gap-4 lg:grid-cols-5">
-
         {/* =====================================================
-            LEFT SIDE - INPUT FORM
+            LEFT SIDE - INPUT FORM (24 Exact Model Features)
         ===================================================== */}
-
         <form onSubmit={run} className="lg:col-span-3">
           <Card>
-
             <SectionHeader
               eyebrow="AI prediction"
               title="Employee attributes"
             />
 
             <div className="mt-6 space-y-7">
-
-              {/* ================= EMPLOYEE INFORMATION ================= */}
-
+              {/* ================= 1. EMPLOYEE INFORMATION ================= */}
               <div>
                 <h3 className="mb-4 text-sm font-semibold text-foreground">
                   Employee Information
                 </h3>
-
                 <div className="grid gap-5 sm:grid-cols-2">
-
                   <NumberField
                     label="Age"
                     value={input.Age}
                     min={18}
-                    max={70}
+                    max={75}
                     onChange={(v) => set("Age", v)}
                   />
 
                   <SelectField
                     label="Gender"
                     value={input.Gender}
-                    options={["Male", "Female"]}
-                    onChange={(v) => set("Gender", v)}
+                    options={[
+                      { label: "Male", value: "Male" },
+                      { label: "Female", value: "Female" },
+                    ]}
+                    onChange={(v) => set("Gender", v as "Male" | "Female")}
                   />
 
                   <SelectField
                     label="Marital Status"
-                    value={input.Marital_Status}
+                    value={input.MaritalStatus}
                     options={[
-                      "Single",
-                      "Married",
-                      "Divorced",
+                      { label: "Single", value: "Single" },
+                      { label: "Married", value: "Married" },
+                      { label: "Divorced", value: "Divorced" },
                     ]}
-                    onChange={(v) => set("Marital_Status", v)}
+                    onChange={(v) =>
+                      set(
+                        "MaritalStatus",
+                        v as "Single" | "Married" | "Divorced"
+                      )
+                    }
                   />
 
+                  <SelectField
+                    label="Education Level"
+                    value={input.Education}
+                    options={[
+                      { label: "1 - Below College", value: 1 },
+                      { label: "2 - College", value: 2 },
+                      { label: "3 - Bachelor's Degree", value: 3 },
+                      { label: "4 - Master's Degree", value: 4 },
+                      { label: "5 - Doctorate", value: 5 },
+                    ]}
+                    onChange={(v) => set("Education", Number(v))}
+                  />
+
+                  <SelectField
+                    label="Education Field"
+                    value={input.EducationField}
+                    options={[
+                      { label: "Life Sciences", value: "Life Sciences" },
+                      { label: "Medical", value: "Medical" },
+                      { label: "Marketing", value: "Marketing" },
+                      {
+                        label: "Technical Degree",
+                        value: "Technical Degree",
+                      },
+                      { label: "Human Resources", value: "Human Resources" },
+                      { label: "Other", value: "Other" },
+                    ]}
+                    onChange={(v) =>
+                      set("EducationField", v as PredictInput["EducationField"])
+                    }
+                  />
+
+                  <NumberField
+                    label="Distance From Home (miles/km)"
+                    value={input.DistanceFromHome}
+                    min={1}
+                    max={100}
+                    onChange={(v) => set("DistanceFromHome", v)}
+                  />
+                </div>
+              </div>
+
+              {/* ================= 2. ROLE & COMPENSATION ================= */}
+              <div>
+                <h3 className="mb-4 text-sm font-semibold text-foreground">
+                  Role & Compensation
+                </h3>
+                <div className="grid gap-5 sm:grid-cols-2">
                   <SelectField
                     label="Department"
                     value={input.Department}
                     options={[
-                      "Finance",
-                      "HR",
-                      "Marketing",
-                      "Sales",
-                      "IT",
+                      {
+                        label: "Research & Development",
+                        value: "Research & Development",
+                      },
+                      { label: "Sales", value: "Sales" },
+                      {
+                        label: "Human Resources",
+                        value: "Human Resources",
+                      },
                     ]}
-                    onChange={(v) => set("Department", v)}
+                    onChange={(v) =>
+                      set("Department", v as PredictInput["Department"])
+                    }
                   />
 
                   <SelectField
                     label="Job Role"
-                    value={input.Job_Role}
+                    value={input.JobRole}
                     options={[
-                      "Manager",
-                      "Assistant",
-                      "Analyst",
-                      "Executive",
+                      {
+                        label: "Laboratory Technician",
+                        value: "Laboratory Technician",
+                      },
+                      {
+                        label: "Research Scientist",
+                        value: "Research Scientist",
+                      },
+                      {
+                        label: "Sales Executive",
+                        value: "Sales Executive",
+                      },
+                      {
+                        label: "Manufacturing Director",
+                        value: "Manufacturing Director",
+                      },
+                      {
+                        label: "Healthcare Representative",
+                        value: "Healthcare Representative",
+                      },
+                      { label: "Manager", value: "Manager" },
+                      {
+                        label: "Sales Representative",
+                        value: "Sales Representative",
+                      },
+                      {
+                        label: "Research Director",
+                        value: "Research Director",
+                      },
+                      {
+                        label: "Human Resources",
+                        value: "Human Resources",
+                      },
                     ]}
-                    onChange={(v) => set("Job_Role", v)}
+                    onChange={(v) =>
+                      set("JobRole", v as PredictInput["JobRole"])
+                    }
                   />
 
                   <NumberField
-                    label="Job Level"
-                    value={input.Job_Level}
+                    label="Job Level (1-5)"
+                    value={input.JobLevel}
                     min={1}
                     max={5}
-                    onChange={(v) => set("Job_Level", v)}
+                    onChange={(v) => set("JobLevel", v)}
                   />
 
+                  <SelectField
+                    label="Business Travel"
+                    value={input.BusinessTravel}
+                    options={[
+                      { label: "Travel Rarely", value: "Travel_Rarely" },
+                      {
+                        label: "Travel Frequently",
+                        value: "Travel_Frequently",
+                      },
+                      { label: "Non-Travel", value: "Non-Travel" },
+                    ]}
+                    onChange={(v) =>
+                      set("BusinessTravel", v as PredictInput["BusinessTravel"])
+                    }
+                  />
+
+                  <NumberField
+                    label="Monthly Income ($)"
+                    value={input.MonthlyIncome}
+                    min={1000}
+                    step={500}
+                    onChange={(v) => set("MonthlyIncome", v)}
+                  />
+
+                  <NumberField
+                    label="Percent Salary Hike (%)"
+                    value={input.PercentSalaryHike}
+                    min={0}
+                    max={100}
+                    onChange={(v) => set("PercentSalaryHike", v)}
+                  />
+
+                  <SelectField
+                    label="Stock Option Level (0-3)"
+                    value={input.StockOptionLevel}
+                    options={[
+                      { label: "Level 0 (No options)", value: 0 },
+                      { label: "Level 1 (Standard)", value: 1 },
+                      { label: "Level 2 (Elevated)", value: 2 },
+                      { label: "Level 3 (Executive)", value: 3 },
+                    ]}
+                    onChange={(v) => set("StockOptionLevel", Number(v))}
+                  />
                 </div>
               </div>
 
-              {/* ================= WORK INFORMATION ================= */}
-
+              {/* ================= 3. TENURE & WORK HISTORY ================= */}
               <div>
                 <h3 className="mb-4 text-sm font-semibold text-foreground">
-                  Work Information
+                  Tenure & Work History
                 </h3>
-
                 <div className="grid gap-5 sm:grid-cols-2">
-
                   <NumberField
-                    label="Monthly Income"
-                    value={input.Monthly_Income}
+                    label="Total Working Years"
+                    value={input.TotalWorkingYears}
                     min={0}
-                    onChange={(v) =>
-                      set("Monthly_Income", v)
-                    }
-                  />
-
-                  <NumberField
-                    label="Hourly Rate"
-                    value={input.Hourly_Rate}
-                    min={0}
-                    onChange={(v) =>
-                      set("Hourly_Rate", v)
-                    }
+                    max={50}
+                    onChange={(v) => set("TotalWorkingYears", v)}
                   />
 
                   <NumberField
                     label="Years at Company"
-                    value={input.Years_at_Company}
+                    value={input.YearsAtCompany}
                     min={0}
-                    onChange={(v) =>
-                      set("Years_at_Company", v)
-                    }
-                  />
-
-                  <NumberField
-                    label="Years in Current Role"
-                    value={input.Years_in_Current_Role}
-                    min={0}
-                    onChange={(v) =>
-                      set(
-                        "Years_in_Current_Role",
-                        v
-                      )
-                    }
+                    max={50}
+                    onChange={(v) => set("YearsAtCompany", v)}
                   />
 
                   <NumberField
                     label="Years Since Last Promotion"
-                    value={
-                      input.Years_Since_Last_Promotion
-                    }
+                    value={input.YearsSinceLastPromotion}
                     min={0}
-                    onChange={(v) =>
-                      set(
-                        "Years_Since_Last_Promotion",
-                        v
-                      )
-                    }
+                    max={30}
+                    onChange={(v) => set("YearsSinceLastPromotion", v)}
+                  />
+
+                  <NumberField
+                    label="Years with Current Manager"
+                    value={input.YearsWithCurrManager}
+                    min={0}
+                    max={30}
+                    onChange={(v) => set("YearsWithCurrManager", v)}
+                  />
+
+                  <NumberField
+                    label="Companies Worked Prior"
+                    value={input.NumCompaniesWorked}
+                    min={0}
+                    max={20}
+                    onChange={(v) => set("NumCompaniesWorked", v)}
+                  />
+
+                  <NumberField
+                    label="Training Sessions Last Year"
+                    value={input.TrainingTimesLastYear}
+                    min={0}
+                    max={15}
+                    onChange={(v) => set("TrainingTimesLastYear", v)}
+                  />
+                </div>
+              </div>
+
+              {/* ================= 4. SURVEYS & RATINGS ================= */}
+              <div>
+                <h3 className="mb-4 text-sm font-semibold text-foreground">
+                  Employee & Manager Surveys (1-4 Rating Scale)
+                </h3>
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <SelectField
+                    label="Job Satisfaction"
+                    value={input.JobSatisfaction}
+                    options={[
+                      { label: "1 - Low", value: 1 },
+                      { label: "2 - Medium", value: 2 },
+                      { label: "3 - High", value: 3 },
+                      { label: "4 - Very High", value: 4 },
+                    ]}
+                    onChange={(v) => set("JobSatisfaction", Number(v))}
                   />
 
                   <SelectField
-                    label="Overtime"
-                    value={input.Overtime}
-                    options={["No", "Yes"]}
-                    onChange={(v) =>
-                      set("Overtime", v)
-                    }
+                    label="Work Environment Satisfaction"
+                    value={input.EnvironmentSatisfaction}
+                    options={[
+                      { label: "1 - Low", value: 1 },
+                      { label: "2 - Medium", value: 2 },
+                      { label: "3 - High", value: 3 },
+                      { label: "4 - Very High", value: 4 },
+                    ]}
+                    onChange={(v) => set("EnvironmentSatisfaction", Number(v))}
                   />
 
-                  <NumberField
-                    label="Project Count"
-                    value={input.Project_Count}
-                    min={0}
-                    onChange={(v) =>
-                      set("Project_Count", v)
-                    }
+                  <SelectField
+                    label="Work-Life Balance"
+                    value={input.WorkLifeBalance}
+                    options={[
+                      { label: "1 - Bad", value: 1 },
+                      { label: "2 - Good", value: 2 },
+                      { label: "3 - Better", value: 3 },
+                      { label: "4 - Best", value: 4 },
+                    ]}
+                    onChange={(v) => set("WorkLifeBalance", Number(v))}
                   />
 
-                  <NumberField
-                    label="Average Hours / Week"
-                    value={
-                      input.Average_Hours_Worked_Per_Week
-                    }
-                    min={20}
-                    max={80}
-                    onChange={(v) =>
-                      set(
-                        "Average_Hours_Worked_Per_Week",
-                        v
-                      )
-                    }
+                  <SelectField
+                    label="Job Involvement"
+                    value={input.JobInvolvement}
+                    options={[
+                      { label: "1 - Low", value: 1 },
+                      { label: "2 - Medium", value: 2 },
+                      { label: "3 - High", value: 3 },
+                      { label: "4 - Very High", value: 4 },
+                    ]}
+                    onChange={(v) => set("JobInvolvement", Number(v))}
                   />
 
+                  <SelectField
+                    label="Performance Rating"
+                    value={input.PerformanceRating}
+                    options={[
+                      { label: "1 - Low", value: 1 },
+                      { label: "2 - Good", value: 2 },
+                      { label: "3 - Excellent", value: 3 },
+                      { label: "4 - Outstanding", value: 4 },
+                    ]}
+                    onChange={(v) => set("PerformanceRating", Number(v))}
+                  />
                 </div>
               </div>
-
-              {/* ================= EMPLOYEE EXPERIENCE ================= */}
-
-              <div>
-                <h3 className="mb-4 text-sm font-semibold text-foreground">
-                  Employee Experience
-                </h3>
-
-                <div className="grid gap-5 sm:grid-cols-2">
-
-                  <NumberField
-                    label="Job Satisfaction (1-5)"
-                    value={input.Job_Satisfaction}
-                    min={1}
-                    max={5}
-                    onChange={(v) =>
-                      set("Job_Satisfaction", v)
-                    }
-                  />
-
-                  <NumberField
-                    label="Work-Life Balance (1-4)"
-                    value={input.Work_Life_Balance}
-                    min={1}
-                    max={4}
-                    onChange={(v) =>
-                      set("Work_Life_Balance", v)
-                    }
-                  />
-
-                  <NumberField
-                    label="Performance Rating (1-4)"
-                    value={input.Performance_Rating}
-                    min={1}
-                    max={4}
-                    onChange={(v) =>
-                      set("Performance_Rating", v)
-                    }
-                  />
-
-                  <NumberField
-                    label="Work Environment (1-4)"
-                    value={
-                      input.Work_Environment_Satisfaction
-                    }
-                    min={1}
-                    max={4}
-                    onChange={(v) =>
-                      set(
-                        "Work_Environment_Satisfaction",
-                        v
-                      )
-                    }
-                  />
-
-                  <NumberField
-                    label="Manager Relationship (1-4)"
-                    value={
-                      input.Relationship_with_Manager
-                    }
-                    min={1}
-                    max={4}
-                    onChange={(v) =>
-                      set(
-                        "Relationship_with_Manager",
-                        v
-                      )
-                    }
-                  />
-
-                  <NumberField
-                    label="Job Involvement (1-4)"
-                    value={input.Job_Involvement}
-                    min={1}
-                    max={4}
-                    onChange={(v) =>
-                      set("Job_Involvement", v)
-                    }
-                  />
-
-                </div>
-              </div>
-
-              {/* ================= ADDITIONAL FACTORS ================= */}
-
-              <div>
-                <h3 className="mb-4 text-sm font-semibold text-foreground">
-                  Additional Factors
-                </h3>
-
-                <div className="grid gap-5 sm:grid-cols-2">
-
-                  <NumberField
-                    label="Training Hours / Year"
-                    value={
-                      input.Training_Hours_Last_Year
-                    }
-                    min={0}
-                    onChange={(v) =>
-                      set(
-                        "Training_Hours_Last_Year",
-                        v
-                      )
-                    }
-                  />
-
-                  <NumberField
-                    label="Absenteeism"
-                    value={input.Absenteeism}
-                    min={0}
-                    onChange={(v) =>
-                      set("Absenteeism", v)
-                    }
-                  />
-
-                  <NumberField
-                    label="Distance From Home"
-                    value={input.Distance_From_Home}
-                    min={0}
-                    onChange={(v) =>
-                      set(
-                        "Distance_From_Home",
-                        v
-                      )
-                    }
-                  />
-
-                  <NumberField
-                    label="Companies Worked"
-                    value={
-                      input.Number_of_Companies_Worked
-                    }
-                    min={0}
-                    onChange={(v) =>
-                      set(
-                        "Number_of_Companies_Worked",
-                        v
-                      )
-                    }
-                  />
-
-                </div>
-              </div>
-
             </div>
 
             {/* ================= BUTTONS ================= */}
-
             <div className="mt-7 flex gap-3">
-
               <button
                 type="submit"
                 disabled={loading}
                 className="inline-flex h-11 items-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-60"
               >
                 <Sparkles className="size-4" />
-
-                {loading
-                  ? "Analyzing..."
-                  : "Run prediction"}
+                {loading ? "Analyzing..." : "Run prediction"}
               </button>
 
               <button
@@ -562,68 +613,42 @@ export default function PredictPage() {
                 className="inline-flex h-11 items-center gap-2 rounded-xl bg-muted px-4 text-sm font-semibold text-foreground transition-colors hover:bg-accent"
               >
                 <RotateCcw className="size-4" />
-
                 Reset
               </button>
-
             </div>
 
             {/* ================= ERROR ================= */}
-
             {error && (
               <div className="mt-4 rounded-xl bg-danger/10 p-3 text-sm text-danger">
                 {error}
               </div>
             )}
-
           </Card>
         </form>
 
         {/* =====================================================
-            RIGHT SIDE - RESULT
+            RIGHT SIDE - RESULT DISPLAY
         ===================================================== */}
-
         <div className="lg:col-span-2">
           <Card className="h-full">
-
-            <SectionHeader
-              eyebrow="AI Result"
-              title="Retention score"
-            />
-
-            {/* ================= NO RESULT ================= */}
+            <SectionHeader eyebrow="AI Result" title="Retention score" />
 
             {!result ? (
-
               <div className="flex h-72 flex-col items-center justify-center gap-3 text-center">
-
                 <div className="grid size-14 place-items-center rounded-2xl bg-accent text-primary">
                   <Sparkles className="size-6" />
                 </div>
-
-                <p className="max-w-[220px] text-sm text-muted-foreground text-pretty">
-                  Enter employee attributes and run
-                  the AI model to estimate attrition
-                  risk.
+                <p className="max-w-[240px] text-sm text-muted-foreground text-pretty">
+                  Enter employee attributes and run the trained Random Forest
+                  pipeline to estimate retention probability.
                 </p>
-
               </div>
-
             ) : (
-
               <div className="mt-5 flex flex-col gap-6">
-
-                {/* ================= SCORE ================= */}
-
+                {/* ================= SCORE GAUGE ================= */}
                 <div className="flex flex-col items-center gap-3">
-
                   <div className="relative grid size-40 place-items-center">
-
-                    <svg
-                      className="size-40 -rotate-90"
-                      viewBox="0 0 120 120"
-                    >
-
+                    <svg className="size-40 -rotate-90" viewBox="0 0 120 120">
                       <circle
                         cx="60"
                         cy="60"
@@ -632,140 +657,150 @@ export default function PredictPage() {
                         stroke="var(--muted)"
                         strokeWidth="12"
                       />
-
                       <circle
                         cx="60"
                         cy="60"
                         r="52"
                         fill="none"
                         stroke={
-                          risk >= 70
+                          riskPct >= 35
                             ? "var(--danger)"
-                            : risk >= 40
+                            : riskPct >= 20
                               ? "var(--warning)"
                               : "var(--success)"
                         }
                         strokeWidth="12"
                         strokeLinecap="round"
-                        strokeDasharray={
-                          2 * Math.PI * 52
-                        }
+                        strokeDasharray={2 * Math.PI * 52}
                         strokeDashoffset={
-                          2 *
-                          Math.PI *
-                          52 *
-                          (1 - risk / 100)
+                          2 * Math.PI * 52 * (1 - Math.min(riskPct, 100) / 100)
                         }
                       />
-
                     </svg>
 
                     <div className="absolute flex flex-col items-center">
-
                       <span className="font-display text-4xl font-bold text-foreground">
                         {result.probability}%
                       </span>
-
                       <span className="text-xs text-muted-foreground">
                         attrition risk
                       </span>
-
                     </div>
-
                   </div>
-
-                  {/* FIXED STATUS PILL */}
-
-                  <StatusPill status={statusForPill} />
-
-                </div>
-
-                {/* ================= PREDICTION ================= */}
-
-                <div className="rounded-xl bg-muted/60 p-4">
 
                   <div className="flex items-center gap-2">
-
-                    {result.prediction === 1 ? (
-
-                      <AlertTriangle className="size-5 text-danger" />
-
-                    ) : (
-
-                      <CheckCircle2 className="size-5 text-success" />
-
-                    )}
-
-                    <span className="text-sm font-semibold text-foreground">
-
-                      {result.prediction === 1
-                        ? "Employee is predicted to leave"
-                        : "Employee is predicted to stay"}
-
+                    <StatusPill status={statusForPill} />
+                    <span className="text-xs font-medium text-muted-foreground">
+                      ({result.risk_category})
                     </span>
-
                   </div>
-
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Prediction generated by the trained
-                    Random Forest model.
-                  </p>
-
                 </div>
 
-                {/* ================= RECOMMENDATIONS ================= */}
-
-                <div>
-
-                  <h3 className="mb-3 text-sm font-semibold text-foreground">
-                    Recommended actions
-                  </h3>
-
-                  <ul className="flex flex-col gap-2">
-
+                {/* ================= PREDICTION SUMMARY CARD ================= */}
+                <div className="rounded-xl bg-muted/60 p-4">
+                  <div className="flex items-center gap-2">
                     {result.prediction === 1 ? (
+                      <AlertTriangle className="size-5 text-danger shrink-0" />
+                    ) : (
+                      <CheckCircle2 className="size-5 text-success shrink-0" />
+                    )}
+                    <span className="text-sm font-semibold text-foreground">
+                      {result.prediction === 1
+                        ? "Proactive Retention Check-in Recommended"
+                        : "Employee is Predicted to Stay (Retained)"}
+                    </span>
+                  </div>
 
+                  <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                    <span className="rounded-md bg-card px-2 py-1 font-medium text-foreground ring-1 ring-border">
+                      Optimized Cutoff:{" "}
+                      <strong>
+                        {Math.round(result.thresholds.optimized * 100)}%
+                      </strong>
+                    </span>
+                    <span className="rounded-md bg-card px-2 py-1 font-medium text-muted-foreground ring-1 ring-border">
+                      Default Cutoff:{" "}
+                      <strong>
+                        {Math.round(result.thresholds.default * 100)}%
+                      </strong>
+                    </span>
+                  </div>
+
+                  <p className="mt-2.5 text-xs text-muted-foreground">
+                    Classification based on the optimized 0.30 retention-screening
+                    threshold (captures ~64% of departures).
+                  </p>
+                </div>
+
+                {/* ================= CONTEXTUAL EXPLANATION ================= */}
+                <div className="rounded-xl border border-border/70 p-3.5">
+                  <div className="flex items-start gap-2">
+                    <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                    <div>
+                      <h4 className="text-xs font-semibold text-foreground">
+                        Model Estimate Context
+                      </h4>
+                      <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                        {result.explanation}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ================= RECOMMENDED ACTIONS ================= */}
+                <div>
+                  <h3 className="mb-3 text-sm font-semibold text-foreground">
+                    Recommended Actions
+                  </h3>
+                  <ul className="flex flex-col gap-2">
+                    {result.prediction === 1 ? (
                       <>
                         <li className="flex items-start gap-2 text-sm text-muted-foreground">
                           <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" />
-                          Review employee satisfaction
-                          and workload.
+                          <span>
+                            Schedule a supportive 1-on-1 check-in to discuss
+                            growth pathways and workload.
+                          </span>
                         </li>
-
                         <li className="flex items-start gap-2 text-sm text-muted-foreground">
                           <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" />
-                          Schedule a manager-employee
-                          discussion.
+                          <span>
+                            Review compensation alignment, recognition, and
+                            recent promotion history.
+                          </span>
                         </li>
-
                         <li className="flex items-start gap-2 text-sm text-muted-foreground">
                           <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" />
-                          Explore career growth and
-                          retention opportunities.
+                          <span>
+                            Explore workplace flexibility, commute options, and
+                            project rebalancing.
+                          </span>
                         </li>
                       </>
-
                     ) : (
-
-                      <li className="flex items-start gap-2 text-sm text-muted-foreground">
-                        <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" />
-                        Continue current employee
-                        engagement practices.
-                      </li>
-
+                      <>
+                        <li className="flex items-start gap-2 text-sm text-muted-foreground">
+                          <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" />
+                          <span>
+                            Continue current employee engagement and development
+                            rhythms.
+                          </span>
+                        </li>
+                        <li className="flex items-start gap-2 text-sm text-muted-foreground">
+                          <ShieldCheck className="mt-0.5 size-4 shrink-0 text-success" />
+                          <span>
+                            Maintain periodic career growth discussions and
+                            quarterly reviews.
+                          </span>
+                        </li>
+                      </>
                     )}
-
                   </ul>
-
                 </div>
-
               </div>
-
             )}
-
           </Card>
         </div>
-
       </div>
     </AppShell>
   )
