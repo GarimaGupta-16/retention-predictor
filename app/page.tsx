@@ -1,3 +1,5 @@
+"use client"
+
 import Image from "next/image"
 import Link from "next/link"
 import {
@@ -17,7 +19,7 @@ import {
   DeptBarChart,
   SatisfactionChart,
 } from "@/components/dashboard-charts"
-import { EMPLOYEES, KPIS, RISK_BREAKDOWN } from "@/lib/data"
+import { useSettings } from "@/lib/settings-context"
 
 const KPI_ICONS = { users: Users, "trend-down": TrendingDown, clock: Clock, target: Target }
 const KPI_TONES: Record<string, string> = {
@@ -27,12 +29,14 @@ const KPI_TONES: Record<string, string> = {
   success: "bg-success text-white",
 }
 
-const atRisk = [...EMPLOYEES]
-  .filter((e) => e.risk >= 65)
-  .sort((a, b) => b.risk - a.risk)
-  .slice(0, 5)
-
 export default function DashboardPage() {
+  const { kpis, riskBreakdown, deptAttrition, highRiskEmployees, riskThreshold, employees } =
+    useSettings()
+
+  const atRisk = highRiskEmployees.length > 0
+    ? highRiskEmployees.slice(0, 5)
+    : [...employees].sort((a, b) => b.risk - a.risk).slice(0, 5)
+
   return (
     <AppShell title="Dashboard">
       {/* Hero */}
@@ -46,7 +50,10 @@ export default function DashboardPage() {
             Good morning, ready to keep your team?
           </h2>
           <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-            5 employees are currently flagged as high-risk. Run a fresh prediction or review the analytics below.
+            {highRiskEmployees.length}{" "}
+            {highRiskEmployees.length === 1 ? "employee is" : "employees are"}{" "}
+            currently flagged as high-risk (threshold: {riskThreshold}%). Run a
+            fresh prediction or review the analytics below.
           </p>
         </div>
         <Link
@@ -60,13 +67,17 @@ export default function DashboardPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {KPIS.map((kpi) => {
-          const Icon = KPI_ICONS[kpi.icon as keyof typeof KPI_ICONS]
+        {kpis.map((kpi) => {
+          const Icon = KPI_ICONS[kpi.icon as keyof typeof KPI_ICONS] || Users
           const Arrow = kpi.trend === "up" ? ArrowUpRight : ArrowDownRight
           return (
             <Card key={kpi.label} className="p-5">
               <div className="flex items-start justify-between">
-                <div className={`grid size-11 place-items-center rounded-2xl ${KPI_TONES[kpi.tone]}`}>
+                <div
+                  className={`grid size-11 place-items-center rounded-2xl ${
+                    KPI_TONES[kpi.tone] || KPI_TONES.primary
+                  }`}
+                >
                   <Icon className="size-5" />
                 </div>
                 <span
@@ -78,7 +89,9 @@ export default function DashboardPage() {
                   {kpi.delta}
                 </span>
               </div>
-              <p className="mt-4 font-display text-3xl font-bold text-foreground">{kpi.value}</p>
+              <p className="mt-4 font-display text-3xl font-bold text-foreground">
+                {kpi.value}
+              </p>
               <p className="mt-1 text-sm text-muted-foreground">{kpi.label}</p>
             </Card>
           )
@@ -89,7 +102,10 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <div className="flex items-center justify-between">
-            <SectionHeader eyebrow="Monthly Trend" title="Predicted vs actual attrition" />
+            <SectionHeader
+              eyebrow="Monthly Trend"
+              title="Predicted vs actual attrition"
+            />
             <div className="flex items-center gap-4 text-xs font-medium text-muted-foreground">
               <span className="flex items-center gap-1.5">
                 <span className="size-2.5 rounded-full bg-chart-1" /> Predicted
@@ -105,15 +121,24 @@ export default function DashboardPage() {
         </Card>
 
         <Card>
-          <SectionHeader eyebrow="Risk Breakdown" title="Current employee status" />
+          <SectionHeader
+            eyebrow="Risk Breakdown"
+            title="Current employee status"
+          />
           <div className="mt-2">
-            <RiskDonut />
+            <RiskDonut data={riskBreakdown} />
           </div>
           <div className="mt-4 flex flex-col gap-3">
-            {RISK_BREAKDOWN.map((r) => (
-              <div key={r.name} className="flex items-center justify-between text-sm">
+            {riskBreakdown.map((r) => (
+              <div
+                key={r.name}
+                className="flex items-center justify-between text-sm"
+              >
                 <span className="flex items-center gap-2 text-foreground">
-                  <span className="size-2.5 rounded-full" style={{ background: r.color }} />
+                  <span
+                    className="size-2.5 rounded-full"
+                    style={{ background: r.color }}
+                  />
                   {r.name}
                 </span>
                 <span className="font-semibold text-foreground">{r.value}</span>
@@ -126,13 +151,19 @@ export default function DashboardPage() {
       {/* Dept + Satisfaction */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
-          <SectionHeader eyebrow="By Department" title="Predicted attrition rate (%)" />
+          <SectionHeader
+            eyebrow="By Department"
+            title="Predicted attrition rate (%)"
+          />
           <div className="mt-4">
-            <DeptBarChart />
+            <DeptBarChart data={deptAttrition} />
           </div>
         </Card>
         <Card>
-          <SectionHeader eyebrow="Satisfaction" title="Employee satisfaction distribution" />
+          <SectionHeader
+            eyebrow="Satisfaction"
+            title="Employee satisfaction distribution"
+          />
           <div className="mt-4">
             <SatisfactionChart />
           </div>
@@ -145,8 +176,11 @@ export default function DashboardPage() {
           eyebrow="Top At-Risk"
           title="Employees needing attention"
           action={
-            <Link href="/employees" className="text-sm font-medium text-primary hover:underline">
-              View all →
+            <Link
+              href="/employees"
+              className="text-sm font-medium text-primary hover:underline"
+            >
+              View all ({employees.length}) →
             </Link>
           }
         />
@@ -161,19 +195,32 @@ export default function DashboardPage() {
                 className="size-10 rounded-full object-cover"
               />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-foreground">{e.name}</p>
+                <p className="truncate text-sm font-semibold text-foreground">
+                  {e.name}
+                </p>
                 <p className="truncate text-xs text-muted-foreground">
                   {e.role} · {e.department}
                 </p>
               </div>
               <div className="flex items-center gap-4">
                 <div className="hidden h-1.5 w-28 overflow-hidden rounded-full bg-muted sm:block">
-                  <div className="h-full rounded-full bg-danger" style={{ width: `${e.risk}%` }} />
+                  <div
+                    className="h-full rounded-full bg-danger"
+                    style={{ width: `${e.risk}%` }}
+                  />
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-bold text-foreground">{e.risk}%</p>
-                  <p className="text-[11px] font-medium text-danger">High Risk</p>
+                  <p className="text-[11px] font-medium text-danger">
+                    {e.risk >= riskThreshold ? "High Risk" : "Watch"}
+                  </p>
                 </div>
+                <Link
+                  href={`/predict?name=${encodeURIComponent(e.name)}&dept=${encodeURIComponent(e.department)}&role=${encodeURIComponent(e.role)}&tenure=${Math.round(e.tenure)}`}
+                  className="rounded-lg bg-muted px-2.5 py-1 text-xs font-semibold text-foreground transition-colors hover:bg-accent"
+                >
+                  Predict
+                </Link>
               </div>
             </div>
           ))}

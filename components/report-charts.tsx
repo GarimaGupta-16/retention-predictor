@@ -15,8 +15,8 @@ import { DEPT_ATTRITION, RISK_BREAKDOWN } from "@/lib/data"
 
 const axisTick = { fontSize: 11, fill: "var(--muted-foreground)" }
 
-export function DeptRiskChart() {
-  const data = [...DEPT_ATTRITION].sort((a, b) => b.rate - a.rate)
+export function DeptRiskChart({ data: inputData }: { data?: typeof DEPT_ATTRITION }) {
+  const data = [...(inputData || DEPT_ATTRITION)].sort((a, b) => b.rate - a.rate)
   return (
     <ResponsiveContainer width="100%" height={300}>
       <BarChart data={data} layout="vertical" margin={{ top: 4, right: 24, left: 8, bottom: 0 }}>
@@ -63,12 +63,12 @@ export function RetentionDonut({ value }: { value: number }) {
   )
 }
 
-export function StatusMixChart() {
+export function StatusMixChart({ data = RISK_BREAKDOWN }: { data?: typeof RISK_BREAKDOWN }) {
   return (
     <ResponsiveContainer width="100%" height={200}>
       <PieChart>
-        <Pie data={RISK_BREAKDOWN} dataKey="value" nameKey="name" innerRadius={0} outerRadius={90} stroke="none">
-          {RISK_BREAKDOWN.map((d) => (
+        <Pie data={data} dataKey="value" nameKey="name" innerRadius={0} outerRadius={90} stroke="none">
+          {data.map((d) => (
             <Cell key={d.name} fill={d.color} />
           ))}
         </Pie>

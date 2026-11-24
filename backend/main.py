@@ -13,7 +13,30 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+try:
+    from database import (
+        init_db,
+        seed_default_workforce,
+        save_prediction,
+        get_all_employees,
+        get_recent_predictions,
+        get_analytics_metrics,
+    )
+except ImportError:
+    from backend.database import (
+        init_db,
+        seed_default_workforce,
+        save_prediction,
+        get_all_employees,
+        get_recent_predictions,
+        get_analytics_metrics,
+    )
+
 BASE_DIR = Path(__file__).resolve().parent
+
+# Initialize SQLite database and default workforce on startup
+init_db()
+seed_default_workforce()
 
 # Load feature metadata
 features_meta_path = BASE_DIR / "pipeline_features.json"
@@ -50,7 +73,12 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -96,6 +124,10 @@ class EmployeeFeatures(BaseModel):
     ] = Field(..., description="Job role")
     MaritalStatus: Literal["Divorced", "Married", "Single"] = Field(..., description="Marital status")
 
+    # Optional metadata (tracked in SQLite, omitted from ML pipeline input)
+    EmployeeName: Optional[str] = Field(None, description="Optional employee name for tracking in database")
+    EmployeeId: Optional[str] = Field(None, description="Optional employee ID for tracking in database")
+
 
 @app.get("/")
 def home():
@@ -128,6 +160,9 @@ def predict(employee: EmployeeFeatures):
         # Ensure exact column ordering as expected by the pipeline
         df = pd.DataFrame([data_dict])[FEATURE_COLUMNS]
 
+        # Pipeline prediction using standard pipeline.predict()
+        pipeline_pred = int(PIPELINE.predict(df)[0])
+
         # Predict probability
         probas = PIPELINE.predict_proba(df)[0]
         probability = float(probas[POS_CLASS_IDX])
@@ -136,6 +171,7 @@ def predict(employee: EmployeeFeatures):
         # Classifications at both thresholds
         pred_optimized = 1 if probability >= OPTIMIZED_THRESHOLD else 0
         pred_default = 1 if probability >= DEFAULT_THRESHOLD else 0
+        prediction_label = "Leave" if pred_optimized == 1 else "Stay"
 
         # Risk categories (separate concept from decision threshold):
         # Low Risk: probability below 0.20
@@ -169,10 +205,32 @@ def predict(employee: EmployeeFeatures):
             )
             recommendation = "Continue standard employee engagement practices and regular career check-ins."
 
+        # Automatically persist prediction and snapshot in SQLite database
+        prediction_id = save_prediction(
+            prediction_data={
+                "probability": probability_pct,
+                "probability_ratio": round(probability, 4),
+                "prediction": pred_optimized,
+                "prediction_label": prediction_label,
+                "risk": risk_level,
+                "risk_category": risk_category,
+                "threshold": OPTIMIZED_THRESHOLD,
+                "explanation": explanation,
+                "recommendation": recommendation,
+            },
+            features_dict=data_dict,
+            employee_name=getattr(employee, "EmployeeName", None),
+            employee_id=getattr(employee, "EmployeeId", None)
+        )
+
         return {
+            "prediction": pred_optimized,
+            "prediction_label": prediction_label,
+            "prediction_id": prediction_id,
+            "pipeline_predict": pipeline_pred,
             "probability": probability_pct,
             "probability_ratio": round(probability, 4),
-            "prediction": pred_optimized,
+            "threshold": OPTIMIZED_THRESHOLD,
             "prediction_optimized": pred_optimized,
             "prediction_default": pred_default,
             "risk": risk_level,
@@ -187,3 +245,21 @@ def predict(employee: EmployeeFeatures):
         }
     except Exception as err:
         raise HTTPException(status_code=500, detail=f"Inference error: {str(err)}")
+
+
+@app.get("/employees")
+def list_employees():
+    """Retrieve all employees stored in SQLite."""
+    return get_all_employees()
+
+
+@app.get("/analytics")
+def get_analytics(risk_threshold: float = 65.0):
+    """Retrieve workforce statistics, KPIs, and department breakdowns dynamically from SQLite."""
+    return get_analytics_metrics(risk_threshold=risk_threshold)
+
+
+@app.get("/predictions/history")
+def prediction_history(limit: int = 20):
+    """Retrieve recent model predictions from SQLite."""
+    return get_recent_predictions(limit=limit)

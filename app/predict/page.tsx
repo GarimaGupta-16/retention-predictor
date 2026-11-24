@@ -1,6 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, Suspense, useCallback } from "react"
+import { useSearchParams } from "next/navigation"
+import { useSettings } from "@/lib/settings-context"
 import { AppShell } from "@/components/app-shell"
 import { Card, SectionHeader, StatusPill } from "@/components/kit"
 import {
@@ -10,6 +12,7 @@ import {
   AlertTriangle,
   Info,
   ShieldCheck,
+  UserCheck,
 } from "lucide-react"
 
 // Exact 24 model features matching pipeline_features.json
@@ -66,8 +69,11 @@ export type PredictionResponse = {
   probability: number
   probability_ratio: number
   prediction: number // 1 or 0 (at optimized 0.30 threshold)
+  prediction_label?: string // "Leave" or "Stay"
+  pipeline_predict?: number
   prediction_optimized: number
   prediction_default: number
+  threshold?: number
   risk: "Low" | "Medium" | "High"
   risk_category: "Low Risk" | "Moderate Risk" | "High Risk"
   thresholds: {
@@ -188,11 +194,71 @@ function SelectField<T extends string | number>({
   )
 }
 
+function SearchParamsHandler({
+  onSelect,
+}: {
+  onSelect: (name: string, dept: string, role: string, tenure: number) => void
+}) {
+  const searchParams = useSearchParams()
+  useEffect(() => {
+    if (!searchParams) return
+    const name = searchParams.get("name") || ""
+    const dept = searchParams.get("dept") || ""
+    const role = searchParams.get("role") || ""
+    const tenure = Number(searchParams.get("tenure")) || 0
+    if (name || dept || role || tenure) {
+      onSelect(name, dept, role, tenure)
+    }
+  }, [searchParams, onSelect])
+  return null
+}
+
 export default function PredictPage() {
+  const { addOrUpdateEmployee } = useSettings()
   const [input, setInput] = useState<PredictInput>(DEFAULTS)
   const [result, setResult] = useState<PredictionResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [employeeName, setEmployeeName] = useState<string>("")
+  const [savedToDirectory, setSavedToDirectory] = useState(false)
+
+  const handleIncomingParams = useCallback(
+    (name: string, dept: string, role: string, tenure: number) => {
+      if (name) setEmployeeName(name)
+      setInput((prev) => {
+        const next = { ...prev }
+        if (
+          dept &&
+          ["Research & Development", "Sales", "Human Resources"].includes(dept)
+        ) {
+          next.Department = dept as PredictInput["Department"]
+        }
+        if (role) {
+          const validRoles: PredictInput["JobRole"][] = [
+            "Sales Executive",
+            "Research Scientist",
+            "Laboratory Technician",
+            "Manufacturing Director",
+            "Healthcare Representative",
+            "Manager",
+            "Sales Representative",
+            "Research Director",
+            "Human Resources",
+          ]
+          const matched = validRoles.find(
+            (r) => r.toLowerCase() === role.toLowerCase()
+          )
+          if (matched) next.JobRole = matched
+        }
+        if (tenure > 0) {
+          next.YearsAtCompany = tenure
+          next.TotalWorkingYears = Math.max(tenure, next.TotalWorkingYears)
+        }
+        return next
+      })
+    },
+    []
+  )
 
   function set<K extends keyof PredictInput>(key: K, value: PredictInput[K]) {
     setInput((prev) => ({
@@ -209,12 +275,17 @@ export default function PredictPage() {
     setResult(null)
 
     try {
+      const payload = {
+        ...input,
+        ...(employeeName ? { EmployeeName: employeeName } : {}),
+      }
+
       const response = await fetch("/api/predict", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(input),
+        body: JSON.stringify(payload),
       })
 
       if (!response.ok) {
@@ -227,6 +298,20 @@ export default function PredictPage() {
 
       const data: PredictionResponse = await response.json()
       setResult(data)
+
+      if (employeeName) {
+        addOrUpdateEmployee({
+          id: `emp-${Date.now()}`,
+          name: employeeName,
+          email: `${employeeName.toLowerCase().replace(/\s+/g, ".")}@retenai.io`,
+          role: input.JobRole,
+          department: input.Department,
+          tenure: input.YearsAtCompany,
+          satisfaction: Math.round((input.JobSatisfaction / 4) * 100),
+          risk: Math.round(data.probability),
+          avatar: "/avatars/avatar-1.png",
+        })
+      }
     } catch (err: any) {
       console.error(err)
       setError(
@@ -242,6 +327,25 @@ export default function PredictPage() {
     setInput(DEFAULTS)
     setResult(null)
     setError("")
+    setEmployeeName("")
+  }
+
+  function saveToWorkforce() {
+    if (!result) return
+    const nameToSave = employeeName || `Employee ${input.JobRole} (${input.Department})`
+    addOrUpdateEmployee({
+      id: `pred-${Date.now()}`,
+      name: nameToSave,
+      email: `${nameToSave.toLowerCase().replace(/[^a-z0-9]/g, ".")}@retenai.io`,
+      role: input.JobRole,
+      department: input.Department,
+      tenure: input.YearsAtCompany,
+      satisfaction: Math.round((input.JobSatisfaction / 4) * 100),
+      risk: Math.round(result.probability),
+      avatar: "/avatars/avatar-1.png",
+    })
+    setSavedToDirectory(true)
+    setTimeout(() => setSavedToDirectory(false), 3000)
   }
 
   const riskPct = result?.probability ?? 0
@@ -255,6 +359,28 @@ export default function PredictPage() {
 
   return (
     <AppShell title="Predict">
+      <Suspense fallback={null}>
+        <SearchParamsHandler onSelect={handleIncomingParams} />
+      </Suspense>
+
+      {employeeName && (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-primary/30 bg-primary/10 px-4 py-2.5 text-xs text-primary">
+          <div className="flex items-center gap-2">
+            <UserCheck className="size-4 shrink-0" />
+            <span>
+              Pre-filled profile attributes for <strong>{employeeName}</strong> from Workforce Directory.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setEmployeeName("")}
+            className="text-xs font-semibold hover:underline"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-5">
         {/* =====================================================
             LEFT SIDE - INPUT FORM (24 Exact Model Features)
@@ -698,17 +824,24 @@ export default function PredictPage() {
 
                 {/* ================= PREDICTION SUMMARY CARD ================= */}
                 <div className="rounded-xl bg-muted/60 p-4">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     {result.prediction === 1 ? (
                       <AlertTriangle className="size-5 text-danger shrink-0" />
                     ) : (
                       <CheckCircle2 className="size-5 text-success shrink-0" />
                     )}
-                    <span className="text-sm font-semibold text-foreground">
-                      {result.prediction === 1
-                        ? "Proactive Retention Check-in Recommended"
-                        : "Employee is Predicted to Stay (Retained)"}
-                    </span>
+                    <div>
+                      <span className="text-sm font-semibold text-foreground">
+                        {result.prediction === 1
+                          ? "Prediction: Leave (Attrition Alert)"
+                          : "Prediction: Stay (Retention Likely)"}
+                      </span>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {result.prediction === 1
+                          ? "Proactive retention engagement recommended based on calibrated threshold."
+                          : "Employee indicators align with steady retention."}
+                      </p>
+                    </div>
                   </div>
 
                   <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
@@ -749,9 +882,14 @@ export default function PredictPage() {
 
                 {/* ================= RECOMMENDED ACTIONS ================= */}
                 <div>
-                  <h3 className="mb-3 text-sm font-semibold text-foreground">
-                    Recommended Actions
-                  </h3>
+                  <div className="mb-3">
+                    <h3 className="text-sm font-semibold text-foreground">
+                      Recommended Actions
+                    </h3>
+                    <p className="text-[11px] text-muted-foreground">
+                      General HR suggestions for proactive engagement — not causal claims of why an employee may leave.
+                    </p>
+                  </div>
                   <ul className="flex flex-col gap-2">
                     {result.prediction === 1 ? (
                       <>
@@ -797,6 +935,26 @@ export default function PredictPage() {
                     )}
                   </ul>
                 </div>
+
+                {/* ================= SYNC TO WORKFORCE ================= */}
+                <button
+                  type="button"
+                  onClick={saveToWorkforce}
+                  disabled={savedToDirectory}
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-muted px-4 text-xs font-semibold text-foreground transition-colors hover:bg-accent disabled:opacity-70"
+                >
+                  {savedToDirectory ? (
+                    <>
+                      <CheckCircle2 className="size-4 text-success" />
+                      Updated in Workforce Directory!
+                    </>
+                  ) : (
+                    <>
+                      <UserCheck className="size-4 text-primary" />
+                      Sync result to Workforce Directory
+                    </>
+                  )}
+                </button>
               </div>
             )}
           </Card>

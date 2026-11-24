@@ -53,12 +53,12 @@ export function TrendChart() {
   )
 }
 
-export function RiskDonut() {
+export function RiskDonut({ data = RISK_BREAKDOWN }: { data?: typeof RISK_BREAKDOWN }) {
   return (
     <ResponsiveContainer width="100%" height={200}>
       <PieChart>
         <Pie
-          data={RISK_BREAKDOWN}
+          data={data}
           dataKey="value"
           nameKey="name"
           innerRadius={58}
@@ -69,7 +69,7 @@ export function RiskDonut() {
           endAngle={-270}
           stroke="none"
         >
-          {RISK_BREAKDOWN.map((d) => (
+          {data.map((d) => (
             <Cell key={d.name} fill={d.color} />
           ))}
         </Pie>
@@ -78,10 +78,10 @@ export function RiskDonut() {
   )
 }
 
-export function DeptBarChart() {
+export function DeptBarChart({ data = DEPT_ATTRITION }: { data?: typeof DEPT_ATTRITION }) {
   return (
     <ResponsiveContainer width="100%" height={260}>
-      <BarChart data={DEPT_ATTRITION} margin={{ top: 8, right: 8, left: -20, bottom: 24 }}>
+      <BarChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 24 }}>
         <CartesianGrid strokeDasharray="4 4" stroke="var(--border)" vertical={false} />
         <XAxis
           dataKey="dept"

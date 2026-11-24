@@ -1,8 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { AppShell } from "@/components/app-shell"
 import { Card, SectionHeader } from "@/components/kit"
+import { useSettings } from "@/lib/settings-context"
+import { CheckCircle2, ShieldCheck, Activity } from "lucide-react"
 
 function Toggle({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -36,18 +38,29 @@ function Row({ title, desc, children }: { title: string; desc: string; children:
   )
 }
 
-const inputCls =
-  "h-11 w-full rounded-xl bg-card px-3.5 text-sm text-foreground shadow-sm outline-none ring-1 ring-border focus:ring-2 focus:ring-primary"
-
 export default function SettingsPage() {
+  const { riskThreshold, setRiskThreshold, modelInfo, loadingModelInfo } = useSettings()
+
   const [emailAlerts, setEmailAlerts] = useState(true)
   const [weeklyDigest, setWeeklyDigest] = useState(true)
   const [highRiskOnly, setHighRiskOnly] = useState(false)
-  const [threshold, setThreshold] = useState(65)
+  const [localThreshold, setLocalThreshold] = useState(riskThreshold)
+  const [savedMessage, setSavedMessage] = useState(false)
+
+  useEffect(() => {
+    setLocalThreshold(riskThreshold)
+  }, [riskThreshold])
+
+  function handleSave() {
+    setRiskThreshold(localThreshold)
+    setSavedMessage(true)
+    setTimeout(() => setSavedMessage(false), 3500)
+  }
 
   return (
     <AppShell title="Settings">
       <div className="grid gap-4 lg:grid-cols-2">
+        {/* Notifications */}
         <Card>
           <SectionHeader eyebrow="Alerts" title="Notifications" />
           <div className="mt-3">
@@ -63,36 +76,81 @@ export default function SettingsPage() {
           </div>
         </Card>
 
+        {/* Dynamic Model & Threshold Configuration */}
         <Card>
           <SectionHeader eyebrow="Model" title="Prediction preferences" />
+          
           <div className="mt-3 border-b border-border/70 py-4">
-            <p className="flex items-center justify-between text-sm font-medium text-foreground">
-              Risk threshold
-              <span className="font-display font-semibold text-primary">{threshold}%</span>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-foreground">Workforce High-Risk Threshold</p>
+              <span className="font-display text-base font-bold text-primary">{localThreshold}%</span>
+            </div>
+            <p className="mt-1 mb-3 text-xs text-muted-foreground">
+              Employees with predicted attrition probability above this value are flagged as High Risk across the Dashboard and Directory.
             </p>
-            <p className="mb-3 text-xs text-muted-foreground">Scores above this value are flagged as high risk.</p>
             <input
               type="range"
-              min={40}
-              max={90}
-              value={threshold}
-              onChange={(e) => setThreshold(Number(e.target.value))}
+              min={25}
+              max={85}
+              step={5}
+              value={localThreshold}
+              onChange={(e) => setLocalThreshold(Number(e.target.value))}
               className="w-full accent-primary"
             />
+            <div className="mt-1 flex justify-between text-[11px] text-muted-foreground">
+              <span>25% (Sensitive)</span>
+              <span>Default: 65%</span>
+              <span>85% (Conservative)</span>
+            </div>
           </div>
+
+          {/* Real Backend Model Status */}
           <div className="py-4">
-            <p className="mb-2 text-sm font-medium text-foreground">Model version</p>
-            <select className={inputCls} defaultValue="v2.4">
-              <option value="v2.4">RetenAI v2.4 (latest)</option>
-              <option value="v2.1">RetenAI v2.1</option>
-              <option value="v1.9">RetenAI v1.9</option>
-            </select>
+            <p className="mb-2 text-sm font-medium text-foreground">Active ML Pipeline</p>
+            <div className="rounded-xl border border-border/70 bg-muted/40 p-3.5 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-foreground">
+                  {modelInfo?.model_name || "RandomForestClassifier_Balanced"}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 font-medium text-success">
+                  <Activity className="size-3" />
+                  {loadingModelInfo ? "Checking..." : modelInfo?.status === "healthy" ? "Online" : "Connected"}
+                </span>
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2 text-muted-foreground">
+                <div>
+                  <span className="block text-[11px]">Feature Pipeline:</span>
+                  <span className="font-semibold text-foreground">{modelInfo?.features_count || 24} Raw Features</span>
+                </div>
+                <div>
+                  <span className="block text-[11px]">Optimized Cutoff:</span>
+                  <span className="font-semibold text-foreground">
+                    {Math.round((modelInfo?.thresholds?.optimized || 0.30) * 100)}% Attrition
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </Card>
       </div>
 
-      <div className="flex justify-end">
-        <button className="inline-flex h-11 items-center rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90">
+      <div className="mt-4 flex items-center justify-between">
+        {savedMessage ? (
+          <div className="flex items-center gap-2 text-sm font-semibold text-success">
+            <CheckCircle2 className="size-4" />
+            Settings saved and dynamically applied across Dashboard!
+          </div>
+        ) : (
+          <div className="text-xs text-muted-foreground">
+            Changes are persisted locally and update real-time KPI counts.
+          </div>
+        )}
+
+        <button
+          onClick={handleSave}
+          className="inline-flex h-11 items-center rounded-xl bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+        >
           Save changes
         </button>
       </div>

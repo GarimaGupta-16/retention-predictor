@@ -48,8 +48,20 @@ export async function POST(request: Request) {
       } catch {
         errorJson = { detail: errorText }
       }
+
+      let errorMessage = "FastAPI prediction request failed"
+      if (typeof errorJson.detail === "string") {
+        errorMessage = errorJson.detail
+      } else if (Array.isArray(errorJson.detail)) {
+        errorMessage = errorJson.detail
+          .map((d: any) => `${d.loc ? d.loc.slice(1).join(".") : "field"}: ${d.msg}`)
+          .join("; ")
+      } else if (errorJson.error) {
+        errorMessage = errorJson.error
+      }
+
       return NextResponse.json(
-        { error: errorJson.detail || "FastAPI prediction request failed" },
+        { error: errorMessage, details: errorJson.detail },
         { status: backendResponse.status }
       )
     }
